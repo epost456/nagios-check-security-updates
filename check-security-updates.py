@@ -175,7 +175,7 @@ def main():
     result, message = updates.create_output()
     print(message)
 
-    return result
+    exit(result)
 
 
 if __name__ == '__main__':
