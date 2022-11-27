@@ -61,7 +61,7 @@ class Updates:
         self.moderate = []
         self.low = []
 
-    def run(self, cmd: list):
+    def run(self, cmd: list, verbose: bool=False):
         """List security updates and return result"""
         output = ""
 
@@ -85,22 +85,26 @@ class Updates:
             if m:
                 logger.debug(line)
                 self.critical.append(m.group(0))
-                logger.info(f"Critical: {m.group(1)}")
+                if verbose:
+                    logger.info(f"Critical: {m.group(1)}")
             m = re.search(r"Important/Sec.\s*(.*)$", line)
             if m:
                 logger.debug(line)
                 self.important.append(m.group(0))
-                logger.info(f"Important: {m.group(1)}")
+                if verbose:
+                    logger.info(f"Important: {m.group(1)}")
             m = re.search(r"Moderate/Sec.\s*(.*)$", line)
             if m:
                 logger.debug(line)
                 self.moderate.append(m.group(0))
-                logger.info(f"Moderate: {m.group(1)}")
+                if verbose:
+                    logger.info(f"Moderate: {m.group(1)}")
             m = re.search(r"Low/Sec.\s*(.*)$", line)
             if m:
                 logger.debug(line)
                 self.low.append(m.group(0))
-                logger.info(f"Low: {m.group(1)}")
+                if verbose:
+                    logger.info(f"Low: {m.group(1)}")
 
     def create_output(self) -> tuple:
         """Verify result and return output in Nagios format"""
@@ -167,7 +171,7 @@ def main():
 
     # Retrieve list of updates
     updates = Updates()
-    updates.run(['dnf', 'updateinfo', '--list'])
+    updates.run(['dnf', 'updateinfo', '--list'], args.verbose)
     result, message = updates.create_output()
     print(message)
 
