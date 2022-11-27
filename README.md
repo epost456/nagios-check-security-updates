@@ -4,9 +4,11 @@
 
 # nagios-check-security-updates
 Nagios check for security updates in Red Hat Enterprise Linux
+- Performance data for each severity level
 
 ## Prerequisites
-- Python 3.8
+- Python >= 3.8
+- Red Hat Enterprise Linux >= 8
 
 ## Usage
 ```
