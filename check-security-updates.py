@@ -19,7 +19,7 @@ import argparse
 import logging
 import re
 import sys
-from subprocess import run, TimeoutExpired
+from subprocess import run, TimeoutExpired, PIPE
 
 __license__ = "GPLv3"
 __version__ = "0.1"
@@ -67,7 +67,7 @@ class Updates:
 
         try:
             logger.debug(f'Running OS command line: {cmd} ...')
-            process = run(cmd, check=True, timeout=60, capture_output=True)
+            process = run(cmd, check=True, timeout=60, stdout=PIPE)
             self.rc = process.returncode
             output = process.stdout.decode('utf-8').splitlines()
         except (TimeoutExpired, ValueError) as e:
@@ -171,7 +171,7 @@ def main():
 
     # Retrieve list of updates
     updates = Updates()
-    updates.run(['dnf', 'updateinfo', '--list'], args.verbose)
+    updates.run(['yum', 'updateinfo', 'list'], args.verbose)
     result, message = updates.create_output()
     print(message)
 
