@@ -47,6 +47,10 @@ def parseargs() -> argparse.Namespace:
         '-d', '--debug', required=False,
         help='enable debug output', dest='debug',
         action='store_true')
+    parser.add_argument(
+        '-k', '--kernel', required=False,
+        help='ommit kernel patches', dest='nokernel',
+        action='store_true')
     parser.add_argument('-V', '--version', action='version', version='%(prog)s ' + __version__)
 
     args = parser.parse_args()
@@ -54,12 +58,13 @@ def parseargs() -> argparse.Namespace:
 
 
 class Updates:
-    def __init__(self):
+    def __init__(self, nokernel: bool=False):
         self.rc = -1
         self.critical = []
         self.important = []
         self.moderate = []
         self.low = []
+        self.nokernel = nokernel
 
     def run(self, cmd: list, verbose: bool=False):
         """List security updates and return result"""
@@ -81,6 +86,12 @@ class Updates:
             sys.exit(CRITICAL)
 
         for line in output:
+            # Omit kernel patches
+            m = re.search(r"/Sec.\s*(kernel.*)", line)
+            if m and self.nokernel:
+                if verbose:
+                    logger.info(f"Skipping {m.group(1)}")
+                continue
             m = re.search(r"Critical/Sec.\s*(.*)$", line)
             if m:
                 logger.debug(line)
@@ -170,7 +181,7 @@ def main():
     get_logger(args.debug)
 
     # Retrieve list of updates
-    updates = Updates()
+    updates = Updates(True if args.nokernel else False)
     updates.run(['yum', 'updateinfo', 'list'], args.verbose)
     result, message = updates.create_output()
     print(message)
