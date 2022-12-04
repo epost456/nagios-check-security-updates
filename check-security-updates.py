@@ -19,6 +19,8 @@ import argparse
 import logging
 import re
 import sys
+
+from datetime import date, datetime, timedelta
 from subprocess import run, TimeoutExpired, PIPE
 
 __license__ = "GPLv3"
@@ -49,7 +51,7 @@ def parseargs() -> argparse.Namespace:
         action='store_true')
     parser.add_argument(
         '-k', '--kernel', required=False,
-        help='ommit kernel patches', dest='nokernel',
+        help='ommit kernel patches (if kernel live patches are enabled)', dest='nokernel',
         action='store_true')
     parser.add_argument('-V', '--version', action='version', version='%(prog)s ' + __version__)
 
@@ -92,26 +94,34 @@ class Updates:
                 if verbose:
                     logger.info(f"Skipping {m.group(1)}")
                 continue
+
+            # Critical patches
             m = re.search(r"Critical/Sec.\s*(.*)$", line)
-            if m:
+            if isinstance(m, re.Match) and self.check_expired(line, 3):
                 logger.debug(line)
                 self.critical.append(m.group(0))
                 if verbose:
                     logger.info(f"Critical: {m.group(1)}")
+
+            # Important patches
             m = re.search(r"Important/Sec.\s*(.*)$", line)
-            if m:
+            if isinstance(m, re.Match) and self.check_expired(line, 10):
                 logger.debug(line)
                 self.important.append(m.group(0))
                 if verbose:
                     logger.info(f"Important: {m.group(1)}")
+
+            # Moderate patches
             m = re.search(r"Moderate/Sec.\s*(.*)$", line)
-            if m:
+            if isinstance(m, re.Match) and self.check_expired(line, 20):
                 logger.debug(line)
                 self.moderate.append(m.group(0))
                 if verbose:
                     logger.info(f"Moderate: {m.group(1)}")
+
+            # Low patches
             m = re.search(r"Low/Sec.\s*(.*)$", line)
-            if m:
+            if isinstance(m, re.Match) and self.check_expired(line, 30):
                 logger.debug(line)
                 self.low.append(m.group(0))
                 if verbose:
@@ -139,6 +149,44 @@ class Updates:
         message = f'{msg}|{perfdata}'
         logger.debug(message)
         return result, message
+
+    def check_expired(self, line:str, days_limit: int) -> bool:
+        """Check if time frame for update has expired"""
+        output = ""
+
+        m = re.match(r"([^\s]+)\s", line)
+        if m:
+            patch = m.group(0).strip()
+            cmd = ["yum", "updateinfo", "info", f"{patch}"]
+            try:
+                logger.debug(f'Running OS command line: {cmd} ...')
+                process = run(cmd, check=True, timeout=60, stdout=PIPE)
+                self.rc = process.returncode
+                output = process.stdout.decode('utf-8').splitlines()
+            except (TimeoutExpired, ValueError) as e:
+                logger.warning(f'{e}')
+                sys.exit(UNKNOWN)
+            except FileNotFoundError as e:
+                logger.critical(f"CRITICAL: Missing program {cmd[0] if len(cmd) > 0 else ''} ({e})")
+                sys.exit(CRITICAL)
+            except Exception as e:
+                logger.critical(f'CRITICAL: {e}')
+                sys.exit(CRITICAL)
+
+            for info_line in output:
+                m2 = re.match(r"\s*Updated:\s*(.*)", info_line)
+                if m2:
+                    patch_date = datetime.strptime(m2.group(1), "%Y-%m-%d %H:%M:%S").date()
+                    expiration_date = date.today() - timedelta(days_limit)
+                    if patch_date < expiration_date:
+                        logger.debug(f"Timeframe to patch has expired: {patch_date} (more than {days_limit} days ago)")
+                        return True
+                    else:
+                        logger.debug(f"{patch_date=} {expiration_date=} {days_limit=}")
+        else:
+            logger.error(f"Patch line has wrong format: {line}")
+
+        return False
 
 
 class LogFilterWarning(logging.Filter):
