@@ -1,6 +1,6 @@
-![last commit](https://img.shields.io/github/last-commit/groland11/nagios-check-speedtest.svg)
-![languages](https://img.shields.io/github/languages/top/groland11/nagios-check-speedtest.svg)
-![license](https://img.shields.io/github/license/groland11/nagios-check-speedtest.svg)
+![last commit](https://img.shields.io/github/last-commit/groland11/nagios-check-security-updates.svg)
+![languages](https://img.shields.io/github/languages/top/groland11/nagios-check-security-updates.svg)
+![license](https://img.shields.io/github/license/groland11/nagios-check-security-updates.svg)
 
 # nagios-check-security-updates
 Nagios check for security updates in Red Hat Enterprise Linux
