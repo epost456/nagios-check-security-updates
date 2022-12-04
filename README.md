@@ -5,6 +5,7 @@
 # nagios-check-security-updates
 Nagios check for security updates in Red Hat Enterprise Linux
 - Performance data for each severity level
+- Timeframe in which security patches may be applied and no warning is issued
 
 ## Prerequisites
 - Python >= 3.8
