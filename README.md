@@ -8,8 +8,8 @@ Nagios check for security updates in Red Hat Enterprise Linux
 - Timeframe in which security patches may be applied and no warning is issued
 
 ## Prerequisites
-- Python >= 3.8
-- Red Hat Enterprise Linux >= 8
+- Python >= 3.6
+- Red Hat Enterprise Linux >= 7
 
 ## Usage
 ```
