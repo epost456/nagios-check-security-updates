@@ -22,6 +22,7 @@ import sys
 
 from datetime import date, datetime, timedelta
 from subprocess import run, TimeoutExpired, PIPE
+from typing import Match
 
 __license__ = "GPLv3"
 __version__ = "0.1"
@@ -97,7 +98,7 @@ class Updates:
 
             # Critical patches
             m = re.search(r"Critical/Sec.\s*(.*)$", line)
-            if isinstance(m, re.Match) and self.check_expired(line, 3):
+            if isinstance(m, Match) and self.check_expired(line, 30):
                 logger.debug(line)
                 self.critical.append(m.group(0))
                 if verbose:
@@ -105,7 +106,7 @@ class Updates:
 
             # Important patches
             m = re.search(r"Important/Sec.\s*(.*)$", line)
-            if isinstance(m, re.Match) and self.check_expired(line, 10):
+            if isinstance(m, Match) and self.check_expired(line, 90):
                 logger.debug(line)
                 self.important.append(m.group(0))
                 if verbose:
@@ -113,7 +114,7 @@ class Updates:
 
             # Moderate patches
             m = re.search(r"Moderate/Sec.\s*(.*)$", line)
-            if isinstance(m, re.Match) and self.check_expired(line, 20):
+            if isinstance(m, Match) and self.check_expired(line, 90):
                 logger.debug(line)
                 self.moderate.append(m.group(0))
                 if verbose:
@@ -121,7 +122,7 @@ class Updates:
 
             # Low patches
             m = re.search(r"Low/Sec.\s*(.*)$", line)
-            if isinstance(m, re.Match) and self.check_expired(line, 30):
+            if isinstance(m, Match) and self.check_expired(line, 90):
                 logger.debug(line)
                 self.low.append(m.group(0))
                 if verbose:
@@ -182,7 +183,7 @@ class Updates:
                         logger.debug(f"Timeframe to patch has expired: {patch_date} (more than {days_limit} days ago)")
                         return True
                     else:
-                        logger.debug(f"{patch_date=} {expiration_date=} {days_limit=}")
+                        logger.debug(f"patch_date={patch_date} expiration_date={expiration_date} days_limit={days_limit}")
         else:
             logger.error(f"Patch line has wrong format: {line}")
 
