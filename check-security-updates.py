@@ -96,6 +96,16 @@ class Updates:
                     logger.info(f"Skipping {m.group(1)}")
                 continue
 
+            # Always warn about these packages
+            pkgs = "(firefox.*|chrom.*)"
+            m = re.search(r"/Sec.\s*{pkgs}", line)
+            if m:
+                logger.debug(line)
+                self.critical.append(m.group(0))
+                if verbose:
+                    logger.info(f"Critical: {m.group(1)}")
+                continue
+
             # Critical patches
             m = re.search(r"Critical/Sec.\s*(.*)$", line)
             if isinstance(m, Match) and self.check_expired(line, 30):
@@ -157,6 +167,7 @@ class Updates:
 
         m = re.match(r"([^\s]+)\s", line)
         if m:
+            logger.debug(f"{line}")
             patch = m.group(0).strip()
             cmd = ["yum", "updateinfo", "info", f"{patch}"]
             try:
