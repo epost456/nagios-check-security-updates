@@ -60,6 +60,37 @@ def parseargs() -> argparse.Namespace:
     return args
 
 
+class Firmware:
+    def __init__(self, model:str = "Dell", servicetag = ""):
+        self.model = model
+        self.servicetag = servicetag
+
+        # Local firmware versions
+        self.bios_version = ""
+        self.bmc_version = ""
+        self.lifecycle_version = ""
+
+        # Available firmware versions online
+        self.bios_online = []
+        self.bmc_online = []
+        self.lifecycle_online = []
+
+    def get_localfw(self):
+        """Retrieve list of local firmware versions currently installed on the system"""
+        pass
+
+    def get_onlinefw(self) -> bool:
+        """Retrieve list of available firmware versions online"""
+        urls = {"Dell": ""}
+
+        if self.servicetag == "":
+            return False
+
+    def check(self) -> bool:
+        """Compare local to online firmware"""
+        pass
+
+
 class Updates:
     def __init__(self, nokernel: bool=False):
         self.rc = -1
@@ -98,7 +129,7 @@ class Updates:
 
             # Always warn about these packages
             pkgs = "(firefox.*|chrom.*)"
-            m = re.search(r"/Sec.\s*{pkgs}", line)
+            m = re.search(f"\s*{pkgs}", line)
             if m:
                 logger.debug(line)
                 self.critical.append(m.group(0))
@@ -194,7 +225,7 @@ class Updates:
                         logger.debug(f"Timeframe to patch has expired: {patch_date} (more than {days_limit} days ago)")
                         return True
                     else:
-                        logger.debug(f"patch_date={patch_date} expiration_date={expiration_date} days_limit={days_limit}")
+                        logger.debug(f"patch_date={patch_date} days_limit={days_limit} (patch before {patch_date + timedelta(days_limit)})")
         else:
             logger.error(f"Patch line has wrong format: {line}")
 
@@ -240,7 +271,7 @@ def main():
     args = parseargs()
     get_logger(args.debug)
 
-    # Retrieve list of updates
+    # Retrieve list of Linux updates
     updates = Updates(True if args.nokernel else False)
     updates.run(['yum', 'updateinfo', 'list'], args.verbose)
     result, message = updates.create_output()
