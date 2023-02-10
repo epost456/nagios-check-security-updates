@@ -100,6 +100,7 @@ class Updates:
         self.low = []
         self.nokernel = nokernel
         self.next_patchdate = None
+        self.expired = False
 
     def run(self, cmd: list, verbose: bool=False):
         """List security updates and return result"""
@@ -122,6 +123,7 @@ class Updates:
 
         for line in output:
             expiration_date = None
+            expired = None
 
             # Omit kernel patches
             m = re.search(r"/Sec.\s*(kernel.*)", line)
@@ -176,12 +178,16 @@ class Updates:
                 if verbose:
                     logger.info(f"Low: {m.group(1)} - Patch until {expiration_date}")
 
+            if expired:
+                self.expired = True
+
             if expiration_date:
                 if not self.next_patchdate:
                     self.next_patchdate = expiration_date
                 else:
                     if self.next_patchdate > expiration_date:
                         self.next_patchdate = expiration_date
+
         if verbose:
             logger.info(f"Next patch date: {self.next_patchdate}")
 
@@ -192,7 +198,7 @@ class Updates:
         else:
             return UNKNOWN, f'{return_codes[UNKNOWN]}'
 
-        if len(self.important) > 0 or len(self.moderate) > 0 or len(self.low) > 0:
+        if self.expired and (len(self.important) > 0 or len(self.moderate) > 0 or len(self.low) > 0):
             result = WARNING
         if len(self.critical) > 0:
             result = CRITICAL
