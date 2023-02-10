@@ -29,8 +29,8 @@ $ check-security-updates.py -v
 2022-11-27 19:18:52 [110868] INFO: Moderate: kernel-5.14.0-162.6.1.el9_1.x86_64
 2022-11-27 19:18:52 [110868] INFO: Moderate: kernel-core-5.14.0-162.6.1.el9_1.x86_64
 2022-11-27 19:18:52 [110868] INFO: Moderate: kernel-modules-5.14.0-162.6.1.el9_1.x86_64
-WARNING: Critical=0 Important=0 Moderate=3 Low=0|Critical=0;Important=0;Moderate=3;Low=0;
+WARNING: Critical=0 Important=0 Moderate=3 Low=0 next_patch_date=None|Critical=0;Important=0;Moderate=3;Low=0;
 
 $ check-security-updates.py
-WARNING: Critical=0 Important=0 Moderate=3 Low=0|Critical=0;Important=0;Moderate=3;Low=0;
+WARNING: Critical=0 Important=0 Moderate=3 Low=0 next_patch_date=2023-02-22|Critical=0;Important=0;Moderate=3;Low=0;
 ```
