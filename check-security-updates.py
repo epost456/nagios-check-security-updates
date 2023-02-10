@@ -244,8 +244,8 @@ class Updates:
                 if m2:
                     patch_date = datetime.strptime(m2.group(1), "%Y-%m-%d %H:%M:%S").date()
                     expiration_date = patch_date + timedelta(days_limit)
-                    if date.today() <= expiration_date:
-                        logger.debug(f"Timeframe to patch has expired: {patch_date} (more than {days_limit} days ago)")
+                    if date.today() >= expiration_date:
+                        logger.debug(f"Timeframe to patch has expired: {expiration_date} (more than {days_limit} days ago)")
                         return True, expiration_date
                     else:
                         logger.debug(f"patch_date={patch_date} days_limit={days_limit} (patch before {patch_date + timedelta(days_limit)})")
