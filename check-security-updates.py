@@ -99,6 +99,7 @@ class Updates:
         self.moderate = []
         self.low = []
         self.nokernel = nokernel
+        self.next_patchdate = None
 
     def run(self, cmd: list, verbose: bool=False):
         """List security updates and return result"""
@@ -120,6 +121,8 @@ class Updates:
             sys.exit(CRITICAL)
 
         for line in output:
+            expiration_date = None
+
             # Omit kernel patches
             m = re.search(r"/Sec.\s*(kernel.*)", line)
             if m and self.nokernel:
@@ -139,35 +142,48 @@ class Updates:
 
             # Critical patches
             m = re.search(r"Critical/Sec.\s*(.*)$", line)
-            if isinstance(m, Match) and self.check_expired(line, 30):
+            if isinstance(m, Match):
+                (expired, expiration_date) = self.check_expired(line, 30)
                 logger.debug(line)
                 self.critical.append(m.group(0))
                 if verbose:
-                    logger.info(f"Critical: {m.group(1)}")
+                    logger.info(f"Critical: {m.group(1)} - Patch until {expiration_date}")
 
             # Important patches
             m = re.search(r"Important/Sec.\s*(.*)$", line)
-            if isinstance(m, Match) and self.check_expired(line, 90):
+            if isinstance(m, Match):
+                (expired, expiration_date) = self.check_expired(line, 90)
                 logger.debug(line)
                 self.important.append(m.group(0))
                 if verbose:
-                    logger.info(f"Important: {m.group(1)}")
+                    logger.info(f"Important: {m.group(1)} - Patch until {expiration_date}")
 
             # Moderate patches
             m = re.search(r"Moderate/Sec.\s*(.*)$", line)
-            if isinstance(m, Match) and self.check_expired(line, 90):
+            if isinstance(m, Match):
+                (expired, expiration_date) = self.check_expired(line, 90)
                 logger.debug(line)
                 self.moderate.append(m.group(0))
                 if verbose:
-                    logger.info(f"Moderate: {m.group(1)}")
+                    logger.info(f"Moderate: {m.group(1)} - Patch until {expiration_date}")
 
             # Low patches
             m = re.search(r"Low/Sec.\s*(.*)$", line)
-            if isinstance(m, Match) and self.check_expired(line, 90):
+            if isinstance(m, Match):
+                (expired, expiration_date) = self.check_expired(line, 90)
                 logger.debug(line)
                 self.low.append(m.group(0))
                 if verbose:
-                    logger.info(f"Low: {m.group(1)}")
+                    logger.info(f"Low: {m.group(1)} - Patch until {expiration_date}")
+
+            if expiration_date:
+                if not self.next_patchdate:
+                    self.next_patchdate = expiration_date
+                else:
+                    if self.next_patchdate > expiration_date:
+                        self.next_patchdate = expiration_date
+        if verbose:
+            logger.info(f"Next patch date: {self.next_patchdate}")
 
     def create_output(self) -> tuple:
         """Verify result and return output in Nagios format"""
@@ -176,13 +192,13 @@ class Updates:
         else:
             return UNKNOWN, f'{return_codes[UNKNOWN]}'
 
-        if len(self.critical) > 0:
-            result = CRITICAL
         if len(self.important) > 0 or len(self.moderate) > 0 or len(self.low) > 0:
             result = WARNING
+        if len(self.critical) > 0:
+            result = CRITICAL
 
         msg = f'{return_codes[result]}: Critical={len(self.critical)} Important={len(self.important)} ' \
-              f'Moderate={len(self.moderate)} Low={len(self.low)}'
+              f'Moderate={len(self.moderate)} Low={len(self.low)} next_patch_date={self.next_patchdate}'
         perfdata = f'Critical={len(self.critical)};' \
                    f'Important={len(self.important)};' \
                    f'Moderate={len(self.moderate)};' \
@@ -192,9 +208,10 @@ class Updates:
         logger.debug(message)
         return result, message
 
-    def check_expired(self, line:str, days_limit: int) -> bool:
+    def check_expired(self, line:str, days_limit: int) -> tuple:
         """Check if time frame for update has expired"""
         output = ""
+        expiration_date = None
 
         m = re.match(r"([^\s]+)\s", line)
         if m:
@@ -220,16 +237,16 @@ class Updates:
                 m2 = re.match(r"\s*Updated:\s*(.*)", info_line)
                 if m2:
                     patch_date = datetime.strptime(m2.group(1), "%Y-%m-%d %H:%M:%S").date()
-                    expiration_date = date.today() - timedelta(days_limit)
-                    if patch_date < expiration_date:
+                    expiration_date = patch_date + timedelta(days_limit)
+                    if date.today() <= expiration_date:
                         logger.debug(f"Timeframe to patch has expired: {patch_date} (more than {days_limit} days ago)")
-                        return True
+                        return True, expiration_date
                     else:
                         logger.debug(f"patch_date={patch_date} days_limit={days_limit} (patch before {patch_date + timedelta(days_limit)})")
         else:
             logger.error(f"Patch line has wrong format: {line}")
 
-        return False
+        return False, expiration_date
 
 
 class LogFilterWarning(logging.Filter):
