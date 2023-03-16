@@ -16,13 +16,14 @@ You should have received a copy of the GNU General Public License along with
 this program. If not, see <http://www.gnu.org/licenses/>.
 """
 import argparse
+import csv
 import logging
 import re
 import sys
 
 from datetime import date, datetime, timedelta
 from subprocess import run, TimeoutExpired, PIPE
-from typing import Match
+from typing import Match, Union
 
 __license__ = "GPLv3"
 __version__ = "0.1"
@@ -53,6 +54,10 @@ def parseargs() -> argparse.Namespace:
     parser.add_argument(
         '-k', '--kernel', required=False,
         help='ommit kernel patches (if kernel live patches are enabled)', dest='nokernel',
+        action='store_true')
+    parser.add_argument(
+        '-c', '--cache', required=False, default='/tmp/check-security-updates.cache',
+        help='local cache file for patch dates (default: /tmp/check-security-updates.cache)', dest='cache',
         action='store_true')
     parser.add_argument('-V', '--version', action='version', version='%(prog)s ' + __version__)
 
@@ -92,12 +97,13 @@ class Firmware:
 
 
 class Updates:
-    def __init__(self, nokernel: bool=False):
+    def __init__(self, cache_file:str, nokernel: bool=False):
         self.rc = -1
         self.critical = []
         self.important = []
         self.moderate = []
         self.low = []
+        self.cache_file = cache_file
         self.nokernel = nokernel
         self.next_patchdate = None
         self.expired = False
@@ -223,36 +229,77 @@ class Updates:
         if m:
             logger.debug(f"{line}")
             patch = m.group(0).strip()
-            cmd = ["yum", "updateinfo", "info", f"{patch}"]
-            try:
-                logger.debug(f'Running OS command line: {cmd} ...')
-                process = run(cmd, check=True, timeout=60, stdout=PIPE)
-                self.rc = process.returncode
-                output = process.stdout.decode('utf-8').splitlines()
-            except (TimeoutExpired, ValueError) as e:
-                logger.warning(f'{e}')
-                sys.exit(UNKNOWN)
-            except FileNotFoundError as e:
-                logger.critical(f"CRITICAL: Missing program {cmd[0] if len(cmd) > 0 else ''} ({e})")
-                sys.exit(CRITICAL)
-            except Exception as e:
-                logger.critical(f'CRITICAL: {e}')
-                sys.exit(CRITICAL)
 
-            for info_line in output:
-                m2 = re.match(r"\s*Updated:\s*(.*)", info_line)
-                if m2:
-                    patch_date = datetime.strptime(m2.group(1), "%Y-%m-%d %H:%M:%S").date()
-                    expiration_date = patch_date + timedelta(days_limit)
-                    if date.today() >= expiration_date:
-                        logger.debug(f"Timeframe to patch has expired: {expiration_date} (more than {days_limit} days ago)")
-                        return True, expiration_date
-                    else:
-                        logger.debug(f"patch_date={patch_date} days_limit={days_limit} (patch before {patch_date + timedelta(days_limit)})")
+            # Check if patch is already in local cache
+            patch_date = self.check_cache(patch)
+            if patch_date is not None:
+                logger.debug(f"Local cache: {patch} {patch_date}")
+            else:
+                # Retrieve patch info online
+                cmd = ["yum", "updateinfo", "info", f"{patch}"]
+                try:
+                    logger.debug(f'Running OS command line: {cmd} ...')
+                    process = run(cmd, check=True, timeout=60, stdout=PIPE)
+                    self.rc = process.returncode
+                    output = process.stdout.decode('utf-8').splitlines()
+                except (TimeoutExpired, ValueError) as e:
+                    logger.warning(f'{e}')
+                    sys.exit(UNKNOWN)
+                except FileNotFoundError as e:
+                    logger.critical(f"CRITICAL: Missing program {cmd[0] if len(cmd) > 0 else ''} ({e})")
+                    sys.exit(CRITICAL)
+                except Exception as e:
+                    logger.critical(f'CRITICAL: {e}')
+                    sys.exit(CRITICAL)
+    
+                for info_line in output:
+                    m2 = re.match(r"\s*Updated:\s*(.*)", info_line)
+                    if m2:
+                        patch_date = datetime.strptime(m2.group(1), "%Y-%m-%d %H:%M:%S").date()
+                        if self.update_cache(patch, patch_date):
+                            logger.debug(f"Local cache updated: {patch} {patch_date}")
+
+            # Calculate expiration date after which patch has to be installed
+            if patch_date is not None:
+                expiration_date = patch_date + timedelta(days_limit)
+                if date.today() >= expiration_date:
+                    logger.debug(f"Timeframe to patch has expired: {expiration_date} (more than {days_limit} days ago)")
+                    return True, expiration_date
+                else:
+                    logger.debug(f"patch_date={patch_date} days_limit={days_limit} (patch before {patch_date + timedelta(days_limit)})")
         else:
             logger.error(f"Patch line has wrong format: {line}")
 
         return False, expiration_date
+
+    def check_cache(self, patch:str) -> Union[datetime.date, None]:
+        '''Check local cache for patch release date'''
+        patch_date = None
+
+        try:
+            with open(self.cache_file) as csv_file:
+                csv_reader = csv.reader(csv_file, delimiter=',')
+                for row in csv_reader:
+                    if patch == row[0]:
+                        patch_date = datetime.strptime(row[1], "%Y-%m-%d %H:%M:%S").date()
+        except Exception:
+            pass
+
+        return patch_date
+
+    def update_cache(self, patch:str, patch_date: datetime.date) -> bool:
+        '''Insert patch release date in local cache'''
+        patch_date_str = patch_date.strftime("%Y-%m-%d %H:%M:%S")
+
+        try:
+            with open(self.cache_file, mode='a') as csv_file:
+                employee_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                employee_writer.writerow([patch, patch_date_str])
+        except Exception as e:
+            logger.error(f"Error writing cache file {self.cache_file}: {e}")
+            return False
+
+        return True
 
 
 class LogFilterWarning(logging.Filter):
@@ -295,7 +342,7 @@ def main():
     get_logger(args.debug)
 
     # Retrieve list of Linux updates
-    updates = Updates(True if args.nokernel else False)
+    updates = Updates(args.cache, True if args.nokernel else False)
     updates.run(['yum', 'updateinfo', 'list'], args.verbose)
     result, message = updates.create_output()
     print(message)
