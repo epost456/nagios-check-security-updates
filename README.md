@@ -14,14 +14,17 @@ Nagios check for security updates in Red Hat Enterprise Linux
 ## Usage
 ```
 ./check-security-updates.py -h
-usage: check-security-updates.py [-h] [-v] [-d]
+usage: check-security-updates.py [-h] [-v] [-d] [-k] [-c] [-V]
 
 Nagios check for security updates
 
 optional arguments:
--h, --help            show this help message and exit
--v, --verbose         enable verbose output
--d, --debug           generate additional debugging output
+  -h, --help     show this help message and exit
+  -v, --verbose  enable verbose output
+  -d, --debug    enable debug output
+  -k, --kernel   ommit kernel patches (if kernel live patches are enabled)
+  -c, --cache    local cache file for patch dates (default: /tmp/check-security-updates.cache)
+  -V, --version  show program's version number and exit
 ```
 ## Examples
 ```
