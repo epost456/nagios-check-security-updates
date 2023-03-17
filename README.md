@@ -4,8 +4,11 @@
 
 # nagios-check-security-updates
 Nagios check for security updates in Red Hat Enterprise Linux
-- Performance data for each severity level
-- Timeframe in which security patches may be applied and no warning is issued
+- Performance data for available patches in each severity level
+- Timeframe in which security patches must be applied and no warning is issued:
+  - Criticcal: 30 days
+  - Important, Moderate, Low: 90 days
+- Patch information is cached in local file to minimize online requests. Patch information older than 1 year is automatically removed from cache file.
 
 ## Prerequisites
 - Python >= 3.6
@@ -14,14 +17,17 @@ Nagios check for security updates in Red Hat Enterprise Linux
 ## Usage
 ```
 ./check-security-updates.py -h
-usage: check-security-updates.py [-h] [-v] [-d]
+usage: check-security-updates.py [-h] [-v] [-d] [-k] [-c] [-V]
 
 Nagios check for security updates
 
 optional arguments:
--h, --help            show this help message and exit
--v, --verbose         enable verbose output
--d, --debug           generate additional debugging output
+  -h, --help     show this help message and exit
+  -v, --verbose  enable verbose output
+  -d, --debug    enable debug output
+  -k, --kernel   ommit kernel patches (if kernel live patches are enabled)
+  -c, --cache    local cache file for patch dates (default: /tmp/check-security-updates.cache)
+  -V, --version  show program's version number and exit
 ```
 ## Examples
 ```
