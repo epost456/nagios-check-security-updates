@@ -274,18 +274,16 @@ class Updates:
 
     def check_cache(self, patch:str) -> Union[datetime.date, None]:
         '''Check local cache for patch release date'''
-        patch_date = None
-
         try:
             with open(self.cache_file) as csv_file:
                 csv_reader = csv.reader(csv_file, delimiter=',')
                 for row in csv_reader:
                     if patch == row[0]:
-                        patch_date = datetime.strptime(row[1], "%Y-%m-%d %H:%M:%S").date()
+                        return datetime.strptime(row[1], "%Y-%m-%d %H:%M:%S").date()
         except Exception:
             pass
 
-        return patch_date
+        return None
 
     def update_cache(self, patch:str, patch_date: datetime.date) -> bool:
         '''Insert patch release date in local cache'''
@@ -293,10 +291,41 @@ class Updates:
 
         try:
             with open(self.cache_file, mode='a') as csv_file:
-                employee_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                employee_writer.writerow([patch, patch_date_str])
+                patch_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                patch_writer.writerow([patch, patch_date_str])
         except Exception as e:
             logger.error(f"Error writing cache file {self.cache_file}: {e}")
+            return False
+
+        return True
+
+    def clean_cache(self) -> bool:
+        '''Delete patch information older than 1 year'''
+        patches = {}
+
+        # Read cache file
+        try:
+            with open(self.cache_file) as csv_file:
+                csv_reader = csv.DictReader(csv_file, delimiter=',', fieldnames=['patch_name', 'patch_date'])
+                for row in csv_reader:
+                    patches[row['patch_name']] = row['patch_date']
+        except Exception as e:
+            logger.error(f"Read error while cleaning cache file {self.cache_file}: {e}")
+            return False
+
+        # Write new cache file, sorted by patch date (newest first)
+        # Patches older than 1 year are ignored
+        try:
+            with open(self.cache_file, mode='w') as csv_file:
+                patch_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                for patch_name, patch_date in sorted(patches.items(), key=lambda kv: (kv[1], kv[0]), reverse=True):
+                    dx = datetime.today() - datetime.strptime(patch_date, "%Y-%m-%d %H:%M:%S")
+                    if dx.days < 365:
+                        patch_writer.writerow([patch_name, patch_date])
+                    else:
+                        logger.debug(f"Removing from cache file: {patch_name} {patch_date}")
+        except Exception as e:
+            logger.error(f"Write error while cleaning cache file {self.cache_file}: {e}")
             return False
 
         return True
@@ -341,11 +370,14 @@ def main():
     args = parseargs()
     get_logger(args.debug)
 
-    # Retrieve list of Linux updates
+    # Retrieve list of available Linux updates
     updates = Updates(args.cache, True if args.nokernel else False)
     updates.run(['yum', 'updateinfo', 'list'], args.verbose)
     result, message = updates.create_output()
     print(message)
+
+    # Clean old entries from cache file
+    updates.clean_cache()
 
     exit(result)
 
