@@ -5,9 +5,9 @@
 # nagios-check-security-updates
 Nagios check for security updates in Red Hat Enterprise Linux
 - Performance data for available patches in each severity level
-- Timeframe in which security patches must be applied and no warning is issued
-  Criticcal: 30 days
-  Important, Moderate, Low: 90 days
+- Timeframe in which security patches must be applied and no warning is issued:
+  - Criticcal: 30 days
+  - Important, Moderate, Low: 90 days
 - Patch information is cached in local file to minimize online requests. Patch information older than 1 year is automatically removed from cache file.
 
 ## Prerequisites
