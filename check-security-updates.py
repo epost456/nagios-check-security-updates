@@ -99,10 +99,10 @@ class Firmware:
 class Updates:
     def __init__(self, cache_file:str, nokernel: bool=False):
         self.rc = -1
-        self.critical = []
-        self.important = []
-        self.moderate = []
-        self.low = []
+        self.critical = {}
+        self.important = {}
+        self.moderate = {}
+        self.low = {}
         self.cache_file = cache_file
         self.nokernel = nokernel
         self.next_patchdate = None
@@ -143,9 +143,7 @@ class Updates:
             m = re.search(f"\s*{pkgs}", line)
             if m:
                 logger.debug(line)
-                self.critical.append(m.group(0))
-                if verbose:
-                    logger.info(f"Critical: {m.group(1)}")
+                self.critical["Critical/Sec.  " + m.group(0).strip()] = datetime.today().strftime("%Y-%m-%d")
                 continue
 
             # Critical patches
@@ -153,36 +151,28 @@ class Updates:
             if isinstance(m, Match):
                 (expired, expiration_date) = self.check_expired(line, 30)
                 logger.debug(line)
-                self.critical.append(m.group(0))
-                if verbose:
-                    logger.info(f"Critical: {m.group(1)} - Patch until {expiration_date}")
+                self.critical[m.group(0)] = expiration_date
 
             # Important patches
             m = re.search(r"Important/Sec.\s*(.*)$", line)
             if isinstance(m, Match):
                 (expired, expiration_date) = self.check_expired(line, 90)
                 logger.debug(line)
-                self.important.append(m.group(0))
-                if verbose:
-                    logger.info(f"Important: {m.group(1)} - Patch until {expiration_date}")
+                self.important[m.group(0)] = expiration_date
 
             # Moderate patches
             m = re.search(r"Moderate/Sec.\s*(.*)$", line)
             if isinstance(m, Match):
                 (expired, expiration_date) = self.check_expired(line, 90)
                 logger.debug(line)
-                self.moderate.append(m.group(0))
-                if verbose:
-                    logger.info(f"Moderate: {m.group(1)} - Patch until {expiration_date}")
+                self.moderate[m.group(0)] = expiration_date
 
             # Low patches
             m = re.search(r"Low/Sec.\s*(.*)$", line)
             if isinstance(m, Match):
                 (expired, expiration_date) = self.check_expired(line, 90)
                 logger.debug(line)
-                self.low.append(m.group(0))
-                if verbose:
-                    logger.info(f"Low: {m.group(1)} - Patch until {expiration_date}")
+                self.low[m.group(0)] = expiration_date
 
             if expired:
                 self.expired = True
@@ -195,6 +185,19 @@ class Updates:
                         self.next_patchdate = expiration_date
 
         if verbose:
+            # Critical
+            for patch_name, expiration_date in sorted(self.critical.items(), key=lambda item: item[1]):
+                logger.info(f"Patch until {expiration_date:<10} {patch_name}")
+            # Important
+            for patch_name, expiration_date in sorted(self.important.items(), key=lambda item: item[1]):
+                logger.info(f"Patch until {expiration_date} {patch_name}")
+            # Medium
+            for patch_name, expiration_date in sorted(self.moderate.items(), key=lambda item: item[1]):
+                logger.info(f"Patch until {expiration_date} {patch_name}")
+            # Low
+            for patch_name, expiration_date in sorted(self.low.items(), key=lambda item: item[1]):
+                logger.info(f"Patch until {expiration_date} {patch_name}")
+
             logger.info(f"Next patch date: {self.next_patchdate}")
 
     def create_output(self) -> tuple:
@@ -300,7 +303,7 @@ class Updates:
         return True
 
     def clean_cache(self) -> bool:
-        '''Delete patch information older than 1 year'''
+        '''Delete patch information from cache file that is older than 1 year'''
         patches = {}
 
         # Read cache file
