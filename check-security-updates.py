@@ -23,7 +23,7 @@ import sys
 
 from datetime import date, datetime, timedelta
 from subprocess import run, TimeoutExpired, PIPE
-from typing import Match, Union
+from typing import Match, Union, Tuple
 
 __license__ = "GPLv3"
 __version__ = "0.1"
@@ -186,21 +186,29 @@ class Updates:
 
         if verbose:
             # Critical
-            for patch_name, expiration_date in sorted(self.critical.items(), key=lambda item: item[1]):
-                logger.info(f"Patch until {expiration_date:<10} {patch_name}")
+            for patch_name, expiration_date in sorted(self.critical.items(), key=lambda item: item[1] if item[1] is not None else datetime.today().date()):
+                if expiration_date is None:
+                    expiration_date = "-         "
+                logger.info(f"Patch until {expiration_date} {patch_name}")
             # Important
-            for patch_name, expiration_date in sorted(self.important.items(), key=lambda item: item[1]):
+            for patch_name, expiration_date in sorted(self.important.items(), key=lambda item: item[1] if item[1] is not None else datetime.today().date()):
+                if expiration_date is None:
+                    expiration_date = "-         "
                 logger.info(f"Patch until {expiration_date} {patch_name}")
             # Medium
-            for patch_name, expiration_date in sorted(self.moderate.items(), key=lambda item: item[1]):
+            for patch_name, expiration_date in sorted(self.moderate.items(), key=lambda item: item[1] if item[1] is not None else datetime.today().date()):
+                if expiration_date is None:
+                    expiration_date = "-         "
                 logger.info(f"Patch until {expiration_date} {patch_name}")
             # Low
-            for patch_name, expiration_date in sorted(self.low.items(), key=lambda item: item[1]):
+            for patch_name, expiration_date in sorted(self.low.items(), key=lambda item: item[1] if item[1] is not None else datetime.today().date()):
+                if expiration_date is None:
+                    expiration_date = "-         "
                 logger.info(f"Patch until {expiration_date} {patch_name}")
 
             logger.info(f"Next patch date: {self.next_patchdate}")
 
-    def create_output(self) -> tuple:
+    def create_output(self) -> Tuple[int, str]:
         """Verify result and return output in Nagios format"""
         if self.rc >= 0:
             result = OK
@@ -223,7 +231,7 @@ class Updates:
         logger.debug(message)
         return result, message
 
-    def check_expired(self, line:str, days_limit: int) -> tuple:
+    def check_expired(self, line:str, days_limit: int) -> Tuple[bool, Union[datetime.date,None]]:
         """Check if time frame for update has expired"""
         output = ""
         expiration_date = None
@@ -234,8 +242,8 @@ class Updates:
             patch = m.group(0).strip()
 
             # Check if patch is already in local cache
-            patch_date = self.check_cache(patch)
-            if patch_date is not None:
+            is_cached, patch_date = self.check_cache(patch)
+            if is_cached:
                 logger.debug(f"Local cache: {patch} {patch_date}")
             else:
                 # Retrieve patch info online
@@ -255,12 +263,20 @@ class Updates:
                     logger.critical(f'CRITICAL: {e}')
                     sys.exit(CRITICAL)
     
+                # Write patch date to cache file
+                m2 = None
                 for info_line in output:
-                    m2 = re.match(r"\s*Updated:\s*(.*)", info_line)
+                    #logger.debug(f"{info_line}")
+                    m2 = re.match(r"\s*(Updated|Issued)\s*:\s*(\d+-\d+-\d+ \d+:\d+:\d+)", info_line)
                     if m2:
-                        patch_date = datetime.strptime(m2.group(1), "%Y-%m-%d %H:%M:%S").date()
+                        patch_date = datetime.strptime(m2.group(2), "%Y-%m-%d %H:%M:%S").date()
                         if self.update_cache(patch, patch_date):
                             logger.debug(f"Local cache updated: {patch} {patch_date}")
+                        break
+
+                if m2 is None:
+                    if self.update_cache(patch, None):
+                        logger.debug(f"Local cache updated: {patch} None")
 
             # Calculate expiration date after which patch has to be installed
             if patch_date is not None:
@@ -275,22 +291,25 @@ class Updates:
 
         return False, expiration_date
 
-    def check_cache(self, patch:str) -> Union[datetime.date, None]:
+    def check_cache(self, patch:str) -> Tuple[bool, Union[datetime.date, None]]:
         '''Check local cache for patch release date'''
         try:
             with open(self.cache_file) as csv_file:
                 csv_reader = csv.reader(csv_file, delimiter=',')
                 for row in csv_reader:
-                    if patch == row[0]:
-                        return datetime.strptime(row[1], "%Y-%m-%d %H:%M:%S").date()
+                    if row[0] == patch:
+                        if row[1] != "None":
+                            return (True, datetime.strptime(row[1], "%Y-%m-%d").date())
+                        else:
+                            return (True, None)
         except Exception:
             pass
 
-        return None
+        return (False, None)
 
-    def update_cache(self, patch:str, patch_date: datetime.date) -> bool:
+    def update_cache(self, patch:str, patch_date: Union[datetime.date, None]) -> bool:
         '''Insert patch release date in local cache'''
-        patch_date_str = patch_date.strftime("%Y-%m-%d %H:%M:%S")
+        patch_date_str = patch_date.strftime("%Y-%m-%d") if patch_date else "None"
 
         try:
             with open(self.cache_file, mode='a') as csv_file:
@@ -321,8 +340,12 @@ class Updates:
         try:
             with open(self.cache_file, mode='w') as csv_file:
                 patch_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                for patch_name, patch_date in sorted(patches.items(), key=lambda kv: (kv[1], kv[0]), reverse=True):
-                    dx = datetime.today() - datetime.strptime(patch_date, "%Y-%m-%d %H:%M:%S")
+                for patch_name, patch_date in sorted(patches.items(), key=lambda kv: kv[1] if kv[1] is not None else datetime.today().date(), reverse=True):
+                    try:
+                        dx = datetime.today() - datetime.strptime(patch_date, "%Y-%m-%d %H:%M:%S")
+                    except ValueError:
+                        dx = timedelta(0)
+
                     if dx.days < 365:
                         patch_writer.writerow([patch_name, patch_date])
                     else:
